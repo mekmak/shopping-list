@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useDisclosure } from '@mantine/hooks'
 import {
   ActionIcon,
@@ -68,26 +68,10 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
+const EMPTY_ITEMS: ThingItemRow[] = []
+
 export function BrainstormView(props: BrainstormViewProps) {
   const { categories, things, catalogItems, thingItems } = props
-  const catalogById = new Map(catalogItems.map((ci) => [ci.id, ci]))
-  const catalogNames = catalogItems.map((ci) => ci.name)
-
-  /** Build the joined item rows for one thing. */
-  function itemsFor(thingId: string): ThingItemRow[] {
-    return thingItems
-      .filter((ti) => ti.thingId === thingId)
-      .map((ti) => {
-        const ci = catalogById.get(ti.catalogItemId)
-        return {
-          catalogItemId: ti.catalogItemId,
-          name: ci?.name ?? '(unknown)',
-          unit: ci?.unit ?? '',
-          store: ci?.defaultStore ?? '',
-          amount: ti.amount,
-        }
-      })
-  }
   const [query, setQuery] = useState('')
   const [openCats, setOpenCats] = useState<Set<string>>(
     () => new Set(categories.map((c) => c.name)),
@@ -95,6 +79,41 @@ export function BrainstormView(props: BrainstormViewProps) {
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set())
   const [openThings, setOpenThings] = useState<Set<string>>(new Set())
   const [dialog, setDialog] = useState<Dialog>(null)
+
+  // Precompute lookups once per data change (not per render / per thing).
+  const catalogNames = useMemo(() => catalogItems.map((ci) => ci.name), [catalogItems])
+  const itemsByThing = useMemo(() => {
+    const byId = new Map(catalogItems.map((ci) => [ci.id, ci]))
+    const map = new Map<string, ThingItemRow[]>()
+    for (const ti of thingItems) {
+      const ci = byId.get(ti.catalogItemId)
+      const row: ThingItemRow = {
+        catalogItemId: ti.catalogItemId,
+        name: ci?.name ?? '(unknown)',
+        unit: ci?.unit ?? '',
+        store: ci?.defaultStore ?? '',
+        amount: ti.amount,
+      }
+      const list = map.get(ti.thingId)
+      if (list) list.push(row)
+      else map.set(ti.thingId, [row])
+    }
+    return map
+  }, [catalogItems, thingItems])
+  const moveTargets = useMemo(
+    () => categories.flatMap((c) => c.subCategories.map((s) => subKeyOf(c.name, s))),
+    [categories],
+  )
+  const toggleThing = useCallback(
+    (id: string) =>
+      setOpenThings((s) => {
+        const next = new Set(s)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      }),
+    [],
+  )
 
   // Jumped here from another tab: open the thing's groups and scroll to it.
   useEffect(() => {
@@ -118,11 +137,6 @@ export function BrainstormView(props: BrainstormViewProps) {
   const q = query.trim().toLowerCase()
   const searching = q.length > 0
   const visible = searching ? things.filter((t) => t.name.toLowerCase().includes(q)) : things
-
-  // Move targets for the per-thing move dropdown (includes empty groups).
-  const moveTargets = categories.flatMap((c) =>
-    c.subCategories.map((s) => subKeyOf(c.name, s)),
-  )
 
   const isCatOpen = (c: string) => searching || openCats.has(c)
   const isSubOpen = (k: string) => searching || openSubs.has(k)
@@ -190,7 +204,7 @@ export function BrainstormView(props: BrainstormViewProps) {
                 />
               </Group>
 
-              <Collapse in={catOpen}>
+              <Collapse in={catOpen} transitionDuration={120}>
                 <Stack gap={4} pl="lg" pt={4}>
                   {cat.subCategories.map((sub) => {
                     const subThings = catThings.filter((t) => t.subCategory === sub)
@@ -225,7 +239,7 @@ export function BrainstormView(props: BrainstormViewProps) {
                           />
                         </Group>
 
-                        <Collapse in={subOpen}>
+                        <Collapse in={subOpen} transitionDuration={120}>
                           <Stack gap={2} pl="lg" pt={2}>
                             {subThings.map((t) => (
                               <ThingRow
@@ -233,9 +247,9 @@ export function BrainstormView(props: BrainstormViewProps) {
                                 thing={t}
                                 open={openThings.has(t.id)}
                                 moveTargets={moveTargets}
-                                items={itemsFor(t.id)}
+                                items={itemsByThing.get(t.id) ?? EMPTY_ITEMS}
                                 catalogNames={catalogNames}
-                                onToggle={() => toggle(openThings, setOpenThings, t.id)}
+                                onToggle={toggleThing}
                                 onUpdateThing={props.onUpdateThing}
                                 onDeleteThing={props.onDeleteThing}
                                 onAddItem={props.onAddItemToThing}
@@ -339,7 +353,7 @@ function RowMenu({ onRename, onDelete }: { onRename: () => void; onDelete: () =>
   )
 }
 
-function ThingRow({
+const ThingRow = memo(function ThingRow({
   thing,
   open,
   moveTargets,
@@ -357,7 +371,7 @@ function ThingRow({
   moveTargets: string[]
   items: ThingItemRow[]
   catalogNames: string[]
-  onToggle: () => void
+  onToggle: (id: string) => void
   onUpdateThing: (id: string, patch: Partial<Thing>) => void
   onDeleteThing: (id: string) => void
   onAddItem: (thingId: string, name: string) => void
@@ -374,7 +388,7 @@ function ThingRow({
 
   return (
     <Box id={`thing-${thing.id}`}>
-      <UnstyledToggle onClick={onToggle}>
+      <UnstyledToggle onClick={() => onToggle(thing.id)}>
         <Chevron open={open} />
         <Text size="sm">{thing.name}</Text>
         {items.length > 0 && (
@@ -384,7 +398,7 @@ function ThingRow({
         )}
       </UnstyledToggle>
 
-      <Collapse in={open}>
+      <Collapse in={open} transitionDuration={120}>
         <Stack gap="sm" pl="lg" pt={6} pb={10}>
           <TextInput
             label="Name"
@@ -448,7 +462,7 @@ function ThingRow({
       </Modal>
     </Box>
   )
-}
+})
 
 function ItemsSection({
   thingId,

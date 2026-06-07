@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Button, Container, Group, Modal, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
@@ -14,153 +14,197 @@ export default function App() {
   const [focusThingId, setFocusThingId] = useState<string | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
 
-  const jumpToThing = (thingId: string) => {
+  const jumpToThing = useCallback((thingId: string) => {
     setActiveTab('brainstorm')
     setFocusThingId(thingId)
-  }
+  }, [])
 
-  const updateThing = (id: string, patch: Partial<Thing>) =>
-    setData((d) => ({
-      ...d,
-      things: d.things.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    }))
+  const handleFocusHandled = useCallback(() => setFocusThingId(null), [])
 
-  const addThing = (category: string, subCategory: string, name: string) =>
-    setData((d) => ({
-      ...d,
-      things: [...d.things, { id: newId(), name, category, subCategory, notes: '' }],
-    }))
+  const updateThing = useCallback(
+    (id: string, patch: Partial<Thing>) =>
+      setData((d) => ({
+        ...d,
+        things: d.things.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      })),
+    [setData],
+  )
 
-  const deleteThing = (id: string) =>
-    setData((d) => ({
-      ...d,
-      things: d.things.filter((t) => t.id !== id),
-      thingItems: d.thingItems.filter((ti) => ti.thingId !== id),
-    }))
+  const addThing = useCallback(
+    (category: string, subCategory: string, name: string) =>
+      setData((d) => ({
+        ...d,
+        things: [...d.things, { id: newId(), name, category, subCategory, notes: '' }],
+      })),
+    [setData],
+  )
 
-  const addCategory = (name: string) =>
-    setData((d) =>
-      d.categories.some((c) => c.name === name)
-        ? d
-        : { ...d, categories: [...d.categories, { name, subCategories: [] }] },
-    )
+  const deleteThing = useCallback(
+    (id: string) =>
+      setData((d) => ({
+        ...d,
+        things: d.things.filter((t) => t.id !== id),
+        thingItems: d.thingItems.filter((ti) => ti.thingId !== id),
+      })),
+    [setData],
+  )
 
-  const renameCategory = (oldName: string, newName: string) =>
-    setData((d) => ({
-      ...d,
-      categories: d.categories.map((c) => (c.name === oldName ? { ...c, name: newName } : c)),
-      things: d.things.map((t) => (t.category === oldName ? { ...t, category: newName } : t)),
-    }))
+  const addCategory = useCallback(
+    (name: string) =>
+      setData((d) =>
+        d.categories.some((c) => c.name === name)
+          ? d
+          : { ...d, categories: [...d.categories, { name, subCategories: [] }] },
+      ),
+    [setData],
+  )
+
+  const renameCategory = useCallback(
+    (oldName: string, newName: string) =>
+      setData((d) => ({
+        ...d,
+        categories: d.categories.map((c) => (c.name === oldName ? { ...c, name: newName } : c)),
+        things: d.things.map((t) => (t.category === oldName ? { ...t, category: newName } : t)),
+      })),
+    [setData],
+  )
 
   /** Delete a category; if non-empty, move its things into `moveTo` first. */
-  const deleteCategory = (name: string, moveTo?: string) =>
-    setData((d) => {
-      let categories = d.categories
-      let things = d.things
-      if (moveTo) {
-        const movedSubs = d.things.filter((t) => t.category === name).map((t) => t.subCategory)
-        categories = categories.map((c) =>
-          c.name === moveTo
-            ? { ...c, subCategories: [...new Set([...c.subCategories, ...movedSubs])] }
+  const deleteCategory = useCallback(
+    (name: string, moveTo?: string) =>
+      setData((d) => {
+        let categories = d.categories
+        let things = d.things
+        if (moveTo) {
+          const movedSubs = d.things.filter((t) => t.category === name).map((t) => t.subCategory)
+          categories = categories.map((c) =>
+            c.name === moveTo
+              ? { ...c, subCategories: [...new Set([...c.subCategories, ...movedSubs])] }
+              : c,
+          )
+          things = d.things.map((t) => (t.category === name ? { ...t, category: moveTo } : t))
+        }
+        return { ...d, categories: categories.filter((c) => c.name !== name), things }
+      }),
+    [setData],
+  )
+
+  const addSubCategory = useCallback(
+    (category: string, name: string) =>
+      setData((d) => ({
+        ...d,
+        categories: d.categories.map((c) =>
+          c.name === category && !c.subCategories.includes(name)
+            ? { ...c, subCategories: [...c.subCategories, name] }
             : c,
-        )
-        things = d.things.map((t) => (t.category === name ? { ...t, category: moveTo } : t))
-      }
-      return { ...d, categories: categories.filter((c) => c.name !== name), things }
-    })
+        ),
+      })),
+    [setData],
+  )
 
-  const addSubCategory = (category: string, name: string) =>
-    setData((d) => ({
-      ...d,
-      categories: d.categories.map((c) =>
-        c.name === category && !c.subCategories.includes(name)
-          ? { ...c, subCategories: [...c.subCategories, name] }
-          : c,
-      ),
-    }))
-
-  const renameSubCategory = (category: string, oldName: string, newName: string) =>
-    setData((d) => ({
-      ...d,
-      categories: d.categories.map((c) =>
-        c.name === category
-          ? { ...c, subCategories: c.subCategories.map((s) => (s === oldName ? newName : s)) }
-          : c,
-      ),
-      things: d.things.map((t) =>
-        t.category === category && t.subCategory === oldName
-          ? { ...t, subCategory: newName }
-          : t,
-      ),
-    }))
+  const renameSubCategory = useCallback(
+    (category: string, oldName: string, newName: string) =>
+      setData((d) => ({
+        ...d,
+        categories: d.categories.map((c) =>
+          c.name === category
+            ? { ...c, subCategories: c.subCategories.map((s) => (s === oldName ? newName : s)) }
+            : c,
+        ),
+        things: d.things.map((t) =>
+          t.category === category && t.subCategory === oldName
+            ? { ...t, subCategory: newName }
+            : t,
+        ),
+      })),
+    [setData],
+  )
 
   /** Delete a subcategory; if non-empty, move its things into `moveTo` first. */
-  const deleteSubCategory = (category: string, name: string, moveTo?: string) =>
-    setData((d) => ({
-      ...d,
-      categories: d.categories.map((c) =>
-        c.name === category
-          ? { ...c, subCategories: c.subCategories.filter((s) => s !== name) }
-          : c,
-      ),
-      things: moveTo
-        ? d.things.map((t) =>
-            t.category === category && t.subCategory === name
-              ? { ...t, subCategory: moveTo }
-              : t,
-          )
-        : d.things,
-    }))
+  const deleteSubCategory = useCallback(
+    (category: string, name: string, moveTo?: string) =>
+      setData((d) => ({
+        ...d,
+        categories: d.categories.map((c) =>
+          c.name === category
+            ? { ...c, subCategories: c.subCategories.filter((s) => s !== name) }
+            : c,
+        ),
+        things: moveTo
+          ? d.things.map((t) =>
+              t.category === category && t.subCategory === name
+                ? { ...t, subCategory: moveTo }
+                : t,
+            )
+          : d.things,
+      })),
+    [setData],
+  )
 
   /** Add an item to a thing: reuse a catalog item by name, else create one. */
-  const addItemToThing = (thingId: string, rawName: string) =>
-    setData((d) => {
-      const name = rawName.trim()
-      if (!name) return d
-      let item = d.catalogItems.find((ci) => ci.name.toLowerCase() === name.toLowerCase())
-      let catalogItems = d.catalogItems
-      if (!item) {
-        item = { id: newId(), name, unit: '', defaultStore: '' }
-        catalogItems = [...d.catalogItems, item]
-      }
-      const linked = d.thingItems.some(
-        (ti) => ti.thingId === thingId && ti.catalogItemId === item!.id,
-      )
-      const thingItems = linked
-        ? d.thingItems
-        : [...d.thingItems, { thingId, catalogItemId: item.id, amount: '' }]
-      return { ...d, catalogItems, thingItems }
-    })
+  const addItemToThing = useCallback(
+    (thingId: string, rawName: string) =>
+      setData((d) => {
+        const name = rawName.trim()
+        if (!name) return d
+        let item = d.catalogItems.find((ci) => ci.name.toLowerCase() === name.toLowerCase())
+        let catalogItems = d.catalogItems
+        if (!item) {
+          item = { id: newId(), name, unit: '', defaultStore: '' }
+          catalogItems = [...d.catalogItems, item]
+        }
+        const linked = d.thingItems.some(
+          (ti) => ti.thingId === thingId && ti.catalogItemId === item!.id,
+        )
+        const thingItems = linked
+          ? d.thingItems
+          : [...d.thingItems, { thingId, catalogItemId: item.id, amount: '' }]
+        return { ...d, catalogItems, thingItems }
+      }),
+    [setData],
+  )
 
-  const updateItemAmount = (thingId: string, catalogItemId: string, amount: string) =>
-    setData((d) => ({
-      ...d,
-      thingItems: d.thingItems.map((ti) =>
-        ti.thingId === thingId && ti.catalogItemId === catalogItemId ? { ...ti, amount } : ti,
-      ),
-    }))
+  const updateItemAmount = useCallback(
+    (thingId: string, catalogItemId: string, amount: string) =>
+      setData((d) => ({
+        ...d,
+        thingItems: d.thingItems.map((ti) =>
+          ti.thingId === thingId && ti.catalogItemId === catalogItemId ? { ...ti, amount } : ti,
+        ),
+      })),
+    [setData],
+  )
 
-  const removeItemFromThing = (thingId: string, catalogItemId: string) =>
-    setData((d) => ({
-      ...d,
-      thingItems: d.thingItems.filter(
-        (ti) => !(ti.thingId === thingId && ti.catalogItemId === catalogItemId),
-      ),
-    }))
+  const removeItemFromThing = useCallback(
+    (thingId: string, catalogItemId: string) =>
+      setData((d) => ({
+        ...d,
+        thingItems: d.thingItems.filter(
+          (ti) => !(ti.thingId === thingId && ti.catalogItemId === catalogItemId),
+        ),
+      })),
+    [setData],
+  )
 
-  const updateCatalogItem = (id: string, patch: Partial<CatalogItem>) =>
-    setData((d) => ({
-      ...d,
-      catalogItems: d.catalogItems.map((ci) => (ci.id === id ? { ...ci, ...patch } : ci)),
-    }))
+  const updateCatalogItem = useCallback(
+    (id: string, patch: Partial<CatalogItem>) =>
+      setData((d) => ({
+        ...d,
+        catalogItems: d.catalogItems.map((ci) => (ci.id === id ? { ...ci, ...patch } : ci)),
+      })),
+    [setData],
+  )
 
   /** Delete a catalog item and unlink it from every thing. */
-  const deleteCatalogItem = (id: string) =>
-    setData((d) => ({
-      ...d,
-      catalogItems: d.catalogItems.filter((ci) => ci.id !== id),
-      thingItems: d.thingItems.filter((ti) => ti.catalogItemId !== id),
-    }))
+  const deleteCatalogItem = useCallback(
+    (id: string) =>
+      setData((d) => ({
+        ...d,
+        catalogItems: d.catalogItems.filter((ci) => ci.id !== id),
+        thingItems: d.thingItems.filter((ti) => ti.catalogItemId !== id),
+      })),
+    [setData],
+  )
 
   return (
     <Container size="md" py="lg">
@@ -195,7 +239,7 @@ export default function App() {
             onUpdateItemAmount={updateItemAmount}
             onRemoveItemFromThing={removeItemFromThing}
             focusThingId={focusThingId}
-            onFocusHandled={() => setFocusThingId(null)}
+            onFocusHandled={handleFocusHandled}
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">

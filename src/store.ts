@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import seed from '../seed.json'
 import type { Category, Dataset, Thing } from './types'
 
@@ -67,9 +67,21 @@ function loadInitial(): Dataset {
 export function useDataset() {
   const [data, setData] = useState<Dataset>(loadInitial)
 
+  // Persist on idle (debounced) so rapid edits don't stringify on every keystroke.
+  const dataRef = useRef(data)
+  dataRef.current = data
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    const id = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataRef.current))
+    }, 400)
+    return () => clearTimeout(id)
   }, [data])
+  // Flush immediately if the page is closing, so nothing in the debounce window is lost.
+  useEffect(() => {
+    const flush = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(dataRef.current))
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
+  }, [])
 
   /** Wipe localStorage and reload the original seed (dev/testing aid). */
   function resetToSeed() {
