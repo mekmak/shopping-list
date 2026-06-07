@@ -10,3 +10,4 @@ npm-debug.log*
 seed.json
 *.md
 .claude
+backups/
