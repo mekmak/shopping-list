@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useDisclosure } from '@mantine/hooks'
 import {
   ActionIcon,
@@ -36,6 +36,9 @@ interface BrainstormViewProps {
   onAddItemToThing: (thingId: string, name: string) => void
   onUpdateItemAmount: (thingId: string, catalogItemId: string, amount: string) => void
   onRemoveItemFromThing: (thingId: string, catalogItemId: string) => void
+  /** When set, expand and scroll to this thing (e.g. jumped from Catalog). */
+  focusThingId: string | null
+  onFocusHandled: () => void
 }
 
 /** A catalog item joined with its per-thing amount, for display in a thing. */
@@ -92,6 +95,25 @@ export function BrainstormView(props: BrainstormViewProps) {
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set())
   const [openThings, setOpenThings] = useState<Set<string>>(new Set())
   const [dialog, setDialog] = useState<Dialog>(null)
+
+  // Jumped here from another tab: open the thing's groups and scroll to it.
+  useEffect(() => {
+    const id = props.focusThingId
+    if (!id) return
+    const t = things.find((x) => x.id === id)
+    if (t) {
+      setOpenCats((s) => new Set(s).add(t.category))
+      setOpenSubs((s) => new Set(s).add(subKeyOf(t.category, t.subCategory)))
+      setOpenThings((s) => new Set(s).add(t.id))
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`thing-${id}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      )
+    }
+    props.onFocusHandled()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.focusThingId])
 
   const q = query.trim().toLowerCase()
   const searching = q.length > 0
@@ -351,7 +373,7 @@ function ThingRow({
   }
 
   return (
-    <Box>
+    <Box id={`thing-${thing.id}`}>
       <UnstyledToggle onClick={onToggle}>
         <Chevron open={open} />
         <Text size="sm">{thing.name}</Text>

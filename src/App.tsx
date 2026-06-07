@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Container, Group, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
@@ -19,6 +20,13 @@ function Placeholder({ title }: { title: string }) {
 
 export default function App() {
   const { data, setData, exportJson, importJson } = useDataset()
+  const [activeTab, setActiveTab] = useState<string | null>('brainstorm')
+  const [focusThingId, setFocusThingId] = useState<string | null>(null)
+
+  const jumpToThing = (thingId: string) => {
+    setActiveTab('brainstorm')
+    setFocusThingId(thingId)
+  }
 
   const updateThing = (id: string, patch: Partial<Thing>) =>
     setData((d) => ({
@@ -155,6 +163,14 @@ export default function App() {
       catalogItems: d.catalogItems.map((ci) => (ci.id === id ? { ...ci, ...patch } : ci)),
     }))
 
+  /** Delete a catalog item and unlink it from every thing. */
+  const deleteCatalogItem = (id: string) =>
+    setData((d) => ({
+      ...d,
+      catalogItems: d.catalogItems.filter((ci) => ci.id !== id),
+      thingItems: d.thingItems.filter((ti) => ti.catalogItemId !== id),
+    }))
+
   return (
     <Container size="md" py="lg">
       <Group justify="space-between" align="center" mb="md">
@@ -162,7 +178,7 @@ export default function App() {
         <BackupControls getExport={exportJson} onImport={importJson} />
       </Group>
 
-      <Tabs defaultValue="brainstorm" keepMounted={false}>
+      <Tabs value={activeTab} onChange={setActiveTab} keepMounted={false}>
         <Tabs.List mb="lg">
           <Tabs.Tab value="brainstorm">Brainstorm</Tabs.Tab>
           <Tabs.Tab value="catalog">Catalog</Tabs.Tab>
@@ -187,13 +203,18 @@ export default function App() {
             onAddItemToThing={addItemToThing}
             onUpdateItemAmount={updateItemAmount}
             onRemoveItemFromThing={removeItemFromThing}
+            focusThingId={focusThingId}
+            onFocusHandled={() => setFocusThingId(null)}
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
           <CatalogView
             catalogItems={data.catalogItems}
             thingItems={data.thingItems}
+            things={data.things}
             onUpdateCatalogItem={updateCatalogItem}
+            onDeleteCatalogItem={deleteCatalogItem}
+            onJumpToThing={jumpToThing}
           />
         </Tabs.Panel>
         <Tabs.Panel value="export">
