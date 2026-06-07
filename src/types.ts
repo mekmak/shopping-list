@@ -34,6 +34,8 @@ export interface Category {
 /** The full app dataset (also the shape of seed.json and JSON backups). */
 export interface Dataset {
   version: number
+  /** Event title shown in the header and at the top of exports. */
+  title: string
   /** Ordered taxonomy; allows empty groups to exist before things are added. */
   categories: Category[]
   things: Thing[]

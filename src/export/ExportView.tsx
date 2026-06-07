@@ -80,12 +80,17 @@ export function ExportView({ data }: { data: Dataset }) {
   const setOpt = (key: keyof ExportOptions, value: boolean) =>
     setOpts((o) => ({ ...o, [key]: value }))
 
-  const blocks =
+  const content =
     pivot === 'store'
       ? buildStoreBlocks(data, opts)
       : pivot === 'thing'
         ? buildThingBlocks(data, opts)
         : buildCategoryBlocks(data, opts)
+  // Prepend the event title as the document heading (only when there's content).
+  const blocks: Block[] =
+    content.length > 0 && data.title.trim()
+      ? [{ type: 'heading', level: 1, text: data.title.trim() }, ...content]
+      : content
   const markdown = blocksToMarkdown(blocks, opts)
 
   async function copy() {

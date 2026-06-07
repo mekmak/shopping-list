@@ -3,9 +3,13 @@ import seed from '../seed.json'
 import type { Category, Dataset, Thing } from './types'
 
 const STORAGE_KEY = 'event-shopping-list/v1'
+const DEFAULT_TITLE = 'Birthday Bash'
 
-/** Dataset as it may exist before the taxonomy migration (categories optional). */
-type RawDataset = Omit<Dataset, 'categories'> & { categories?: Category[] }
+/** Dataset as it may exist before migrations (title/categories optional). */
+type RawDataset = Omit<Dataset, 'categories' | 'title'> & {
+  categories?: Category[]
+  title?: string
+}
 
 /** Derive an ordered taxonomy from things, by first appearance. */
 function deriveCategories(things: Thing[]): Category[] {
@@ -42,7 +46,8 @@ function normalizeDataset(d: RawDataset): Dataset {
     }
     if (!c.subCategories.includes(t.subCategory)) c.subCategories.push(t.subCategory)
   }
-  return { ...d, categories: cats.length ? cats : deriveCategories(d.things) }
+  const title = typeof d.title === 'string' && d.title.trim() ? d.title : DEFAULT_TITLE
+  return { ...d, title, categories: cats.length ? cats : deriveCategories(d.things) }
 }
 
 /** The seed hierarchy generated from the planning doc. */
@@ -108,6 +113,7 @@ export function useDataset() {
     const p = parsed as Partial<RawDataset>
     const raw: RawDataset = {
       version: typeof p.version === 'number' ? p.version : 1,
+      title: typeof p.title === 'string' ? p.title : undefined,
       categories: Array.isArray(p.categories) ? p.categories : undefined,
       things: Array.isArray(p.things) ? p.things : [],
       catalogItems: Array.isArray(p.catalogItems) ? p.catalogItems : [],

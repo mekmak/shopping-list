@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Container, Group, Tabs, Text, Title } from '@mantine/core'
+import { Container, Group, Stack, Text, Tabs, TextInput } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
 import { CatalogView } from './catalog/CatalogView'
@@ -19,6 +19,11 @@ export default function App() {
   }, [])
 
   const handleFocusHandled = useCallback(() => setFocusThingId(null), [])
+
+  const updateTitle = useCallback(
+    (title: string) => setData((d) => ({ ...d, title })),
+    [setData],
+  )
 
   const updateThing = useCallback(
     (id: string, patch: Partial<Thing>) =>
@@ -207,8 +212,22 @@ export default function App() {
 
   return (
     <Container size="md" py="lg">
-      <Group justify="space-between" align="center" mb="md">
-        <Title order={3}>Event Shopping List</Title>
+      <Group justify="space-between" align="flex-start" mb="md" wrap="nowrap">
+        <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Event Shopping List
+          </Text>
+          <TextInput
+            variant="unstyled"
+            value={data.title}
+            onChange={(e) => updateTitle(e.currentTarget.value)}
+            placeholder="Event title"
+            aria-label="Event title"
+            styles={{
+              input: { fontSize: '1.5rem', fontWeight: 700, height: 'auto', lineHeight: 1.2 },
+            }}
+          />
+        </Stack>
         <BackupControls getExport={exportJson} onImport={importJson} />
       </Group>
 
