@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useDisclosure } from '@mantine/hooks'
 import {
   ActionIcon,
+  Autocomplete,
   Badge,
   Box,
   Button,
@@ -16,11 +17,13 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
-import type { Category, Thing } from '../types'
+import type { Category, CatalogItem, Thing, ThingItem } from '../types'
 
 interface BrainstormViewProps {
   categories: Category[]
   things: Thing[]
+  catalogItems: CatalogItem[]
+  thingItems: ThingItem[]
   onUpdateThing: (id: string, patch: Partial<Thing>) => void
   onAddThing: (category: string, subCategory: string, name: string) => void
   onDeleteThing: (id: string) => void
@@ -30,6 +33,18 @@ interface BrainstormViewProps {
   onAddSubCategory: (category: string, name: string) => void
   onRenameSubCategory: (category: string, oldName: string, newName: string) => void
   onDeleteSubCategory: (category: string, name: string, moveTo?: string) => void
+  onAddItemToThing: (thingId: string, name: string) => void
+  onUpdateItemAmount: (thingId: string, catalogItemId: string, amount: string) => void
+  onRemoveItemFromThing: (thingId: string, catalogItemId: string) => void
+}
+
+/** A catalog item joined with its per-thing amount, for display in a thing. */
+export interface ThingItemRow {
+  catalogItemId: string
+  name: string
+  unit: string
+  store: string
+  amount: string
 }
 
 const SEP = ' › '
@@ -51,7 +66,25 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function BrainstormView(props: BrainstormViewProps) {
-  const { categories, things } = props
+  const { categories, things, catalogItems, thingItems } = props
+  const catalogById = new Map(catalogItems.map((ci) => [ci.id, ci]))
+  const catalogNames = catalogItems.map((ci) => ci.name)
+
+  /** Build the joined item rows for one thing. */
+  function itemsFor(thingId: string): ThingItemRow[] {
+    return thingItems
+      .filter((ti) => ti.thingId === thingId)
+      .map((ti) => {
+        const ci = catalogById.get(ti.catalogItemId)
+        return {
+          catalogItemId: ti.catalogItemId,
+          name: ci?.name ?? '(unknown)',
+          unit: ci?.unit ?? '',
+          store: ci?.defaultStore ?? '',
+          amount: ti.amount,
+        }
+      })
+  }
   const [query, setQuery] = useState('')
   const [openCats, setOpenCats] = useState<Set<string>>(
     () => new Set(categories.map((c) => c.name)),
@@ -178,9 +211,14 @@ export function BrainstormView(props: BrainstormViewProps) {
                                 thing={t}
                                 open={openThings.has(t.id)}
                                 moveTargets={moveTargets}
+                                items={itemsFor(t.id)}
+                                catalogNames={catalogNames}
                                 onToggle={() => toggle(openThings, setOpenThings, t.id)}
                                 onUpdateThing={props.onUpdateThing}
                                 onDeleteThing={props.onDeleteThing}
+                                onAddItem={props.onAddItemToThing}
+                                onUpdateItemAmount={props.onUpdateItemAmount}
+                                onRemoveItem={props.onRemoveItemFromThing}
                               />
                             ))}
                             {!searching && (
@@ -283,16 +321,26 @@ function ThingRow({
   thing,
   open,
   moveTargets,
+  items,
+  catalogNames,
   onToggle,
   onUpdateThing,
   onDeleteThing,
+  onAddItem,
+  onUpdateItemAmount,
+  onRemoveItem,
 }: {
   thing: Thing
   open: boolean
   moveTargets: string[]
+  items: ThingItemRow[]
+  catalogNames: string[]
   onToggle: () => void
   onUpdateThing: (id: string, patch: Partial<Thing>) => void
   onDeleteThing: (id: string) => void
+  onAddItem: (thingId: string, name: string) => void
+  onUpdateItemAmount: (thingId: string, catalogItemId: string, amount: string) => void
+  onRemoveItem: (thingId: string, catalogItemId: string) => void
 }) {
   const [confirmOpen, confirm] = useDisclosure(false)
 
@@ -307,6 +355,11 @@ function ThingRow({
       <UnstyledToggle onClick={onToggle}>
         <Chevron open={open} />
         <Text size="sm">{thing.name}</Text>
+        {items.length > 0 && (
+          <Badge variant="light" color="blue" size="xs">
+            {items.length}
+          </Badge>
+        )}
       </UnstyledToggle>
 
       <Collapse in={open}>
@@ -332,9 +385,16 @@ function ThingRow({
             value={thing.notes}
             onChange={(e) => onUpdateThing(thing.id, { notes: e.currentTarget.value })}
           />
-          <Text size="xs" c="dimmed">
-            Items coming in B6.
-          </Text>
+
+          <ItemsSection
+            thingId={thing.id}
+            items={items}
+            catalogNames={catalogNames}
+            onAddItem={onAddItem}
+            onUpdateItemAmount={onUpdateItemAmount}
+            onRemoveItem={onRemoveItem}
+          />
+
           <Group justify="flex-end">
             <Button variant="subtle" color="red" size="xs" onClick={confirm.open}>
               Delete thing
@@ -363,6 +423,98 @@ function ThingRow({
           </Button>
         </Group>
       </Modal>
+    </Box>
+  )
+}
+
+function ItemsSection({
+  thingId,
+  items,
+  catalogNames,
+  onAddItem,
+  onUpdateItemAmount,
+  onRemoveItem,
+}: {
+  thingId: string
+  items: ThingItemRow[]
+  catalogNames: string[]
+  onAddItem: (thingId: string, name: string) => void
+  onUpdateItemAmount: (thingId: string, catalogItemId: string, amount: string) => void
+  onRemoveItem: (thingId: string, catalogItemId: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+
+  function add() {
+    const name = draft.trim()
+    if (!name) return
+    onAddItem(thingId, name)
+    setDraft('')
+  }
+
+  return (
+    <Box>
+      <Text size="sm" fw={500} mb={4}>
+        Items
+      </Text>
+      <Stack gap={6}>
+        {items.length === 0 && (
+          <Text size="xs" c="dimmed">
+            No items yet. Add what you need to buy for this thing.
+          </Text>
+        )}
+        {items.map((it) => (
+          <Group key={it.catalogItemId} gap="xs" wrap="nowrap">
+            <Text size="sm" style={{ flex: 1, minWidth: 0 }}>
+              {it.name}
+              {it.unit && (
+                <Text component="span" c="dimmed" size="xs">
+                  {' '}
+                  ({it.unit})
+                </Text>
+              )}
+              {it.store && (
+                <Text component="span" c="dimmed" size="xs">
+                  {' · '}
+                  {it.store}
+                </Text>
+              )}
+            </Text>
+            <TextInput
+              size="xs"
+              placeholder="amount"
+              value={it.amount}
+              onChange={(e) => onUpdateItemAmount(thingId, it.catalogItemId, e.currentTarget.value)}
+              style={{ width: 110 }}
+            />
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label={`Remove ${it.name}`}
+              onClick={() => onRemoveItem(thingId, it.catalogItemId)}
+            >
+              ✕
+            </ActionIcon>
+          </Group>
+        ))}
+
+        <Group gap="xs" wrap="nowrap">
+          <Autocomplete
+            size="xs"
+            placeholder="+ Add item (type to search or create)…"
+            data={catalogNames}
+            value={draft}
+            onChange={setDraft}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') add()
+            }}
+            comboboxProps={{ withinPortal: true }}
+            style={{ flex: 1, maxWidth: 320 }}
+          />
+          <Button size="xs" variant="light" onClick={add} disabled={!draft.trim()}>
+            Add
+          </Button>
+        </Group>
+      </Stack>
     </Box>
   )
 }

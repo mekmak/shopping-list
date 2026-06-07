@@ -112,6 +112,42 @@ export default function App() {
         : d.things,
     }))
 
+  /** Add an item to a thing: reuse a catalog item by name, else create one. */
+  const addItemToThing = (thingId: string, rawName: string) =>
+    setData((d) => {
+      const name = rawName.trim()
+      if (!name) return d
+      let item = d.catalogItems.find((ci) => ci.name.toLowerCase() === name.toLowerCase())
+      let catalogItems = d.catalogItems
+      if (!item) {
+        item = { id: newId(), name, unit: '', defaultStore: '' }
+        catalogItems = [...d.catalogItems, item]
+      }
+      const linked = d.thingItems.some(
+        (ti) => ti.thingId === thingId && ti.catalogItemId === item!.id,
+      )
+      const thingItems = linked
+        ? d.thingItems
+        : [...d.thingItems, { thingId, catalogItemId: item.id, amount: '' }]
+      return { ...d, catalogItems, thingItems }
+    })
+
+  const updateItemAmount = (thingId: string, catalogItemId: string, amount: string) =>
+    setData((d) => ({
+      ...d,
+      thingItems: d.thingItems.map((ti) =>
+        ti.thingId === thingId && ti.catalogItemId === catalogItemId ? { ...ti, amount } : ti,
+      ),
+    }))
+
+  const removeItemFromThing = (thingId: string, catalogItemId: string) =>
+    setData((d) => ({
+      ...d,
+      thingItems: d.thingItems.filter(
+        (ti) => !(ti.thingId === thingId && ti.catalogItemId === catalogItemId),
+      ),
+    }))
+
   return (
     <Container size="md" py="lg">
       <Group justify="space-between" align="center" mb="md">
@@ -130,6 +166,8 @@ export default function App() {
           <BrainstormView
             categories={data.categories}
             things={data.things}
+            catalogItems={data.catalogItems}
+            thingItems={data.thingItems}
             onUpdateThing={updateThing}
             onAddThing={addThing}
             onDeleteThing={deleteThing}
@@ -139,6 +177,9 @@ export default function App() {
             onAddSubCategory={addSubCategory}
             onRenameSubCategory={renameSubCategory}
             onDeleteSubCategory={deleteSubCategory}
+            onAddItemToThing={addItemToThing}
+            onUpdateItemAmount={updateItemAmount}
+            onRemoveItemFromThing={removeItemFromThing}
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
