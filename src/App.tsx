@@ -1,22 +1,12 @@
 import { useState } from 'react'
-import { Container, Group, Tabs, Text, Title } from '@mantine/core'
+import { Container, Group, Tabs, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
 import { CatalogView } from './catalog/CatalogView'
+import { ExportView } from './export/ExportView'
 import { BackupControls } from './BackupControls'
 import { newId } from './id'
 import type { CatalogItem, Thing } from './types'
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div>
-      <Title order={2} mb="xs">
-        {title}
-      </Title>
-      <Text c="dimmed">Coming soon.</Text>
-    </div>
-  )
-}
 
 export default function App() {
   const { data, setData, exportJson, importJson } = useDataset()
@@ -218,7 +208,7 @@ export default function App() {
           />
         </Tabs.Panel>
         <Tabs.Panel value="export">
-          <Placeholder title="Export" />
+          <ExportView data={data} />
         </Tabs.Panel>
       </Tabs>
     </Container>
