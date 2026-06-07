@@ -7,10 +7,16 @@ import {
   Group,
   Stack,
   Text,
+  Textarea,
   TextInput,
   Title,
 } from '@mantine/core'
 import type { Thing } from '../types'
+
+interface BrainstormViewProps {
+  things: Thing[]
+  onUpdateThing: (id: string, patch: Partial<Thing>) => void
+}
 
 interface SubGroup {
   subCategory: string
@@ -54,13 +60,14 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function BrainstormView({ things }: { things: Thing[] }) {
+export function BrainstormView({ things, onUpdateThing }: BrainstormViewProps) {
   const [query, setQuery] = useState('')
   // Categories open by default; subcategories collapsed (counts visible to scan).
   const [openCats, setOpenCats] = useState<Set<string>>(() => {
     return new Set(groupThings(things).map((g) => g.category))
   })
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set())
+  const [openThings, setOpenThings] = useState<Set<string>>(new Set())
 
   const q = query.trim().toLowerCase()
   const filtered = q ? things.filter((t) => t.name.toLowerCase().includes(q)) : things
@@ -151,9 +158,13 @@ export function BrainstormView({ things }: { things: Thing[] }) {
                           <Collapse in={subOpen}>
                             <Stack gap={2} pl="lg" pt={2}>
                               {sub.things.map((t) => (
-                                <Text key={t.id} size="sm">
-                                  {t.name}
-                                </Text>
+                                <ThingRow
+                                  key={t.id}
+                                  thing={t}
+                                  open={openThings.has(t.id)}
+                                  onToggle={() => toggle(openThings, setOpenThings, t.id)}
+                                  onUpdateThing={onUpdateThing}
+                                />
                               ))}
                             </Stack>
                           </Collapse>
@@ -168,6 +179,43 @@ export function BrainstormView({ things }: { things: Thing[] }) {
         </Stack>
       )}
     </div>
+  )
+}
+
+function ThingRow({
+  thing,
+  open,
+  onToggle,
+  onUpdateThing,
+}: {
+  thing: Thing
+  open: boolean
+  onToggle: () => void
+  onUpdateThing: (id: string, patch: Partial<Thing>) => void
+}) {
+  return (
+    <Box>
+      <UnstyledToggle onClick={onToggle}>
+        <Chevron open={open} />
+        <Text size="sm">{thing.name}</Text>
+      </UnstyledToggle>
+
+      <Collapse in={open}>
+        <Box pl="lg" pt={4} pb={8}>
+          <Textarea
+            label="Notes"
+            placeholder="Notes about this thing…"
+            autosize
+            minRows={2}
+            value={thing.notes}
+            onChange={(e) => onUpdateThing(thing.id, { notes: e.currentTarget.value })}
+          />
+          <Text size="xs" c="dimmed" mt={6}>
+            Items coming in B6.
+          </Text>
+        </Box>
+      </Collapse>
+    </Box>
   )
 }
 

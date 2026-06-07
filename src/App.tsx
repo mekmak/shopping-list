@@ -1,6 +1,7 @@
 import { Container, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
+import type { Thing } from './types'
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -14,7 +15,13 @@ function Placeholder({ title }: { title: string }) {
 }
 
 export default function App() {
-  const { data } = useDataset()
+  const { data, setData } = useDataset()
+
+  const updateThing = (id: string, patch: Partial<Thing>) =>
+    setData((d) => ({
+      ...d,
+      things: d.things.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    }))
 
   return (
     <Container size="md" py="lg">
@@ -30,7 +37,7 @@ export default function App() {
         </Tabs.List>
 
         <Tabs.Panel value="brainstorm">
-          <BrainstormView things={data.things} />
+          <BrainstormView things={data.things} onUpdateThing={updateThing} />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
           <Placeholder title="Catalog" />
