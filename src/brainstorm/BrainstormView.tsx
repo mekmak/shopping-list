@@ -388,6 +388,7 @@ function ThingRow({
 
           <ItemsSection
             thingId={thing.id}
+            thingName={thing.name}
             items={items}
             catalogNames={catalogNames}
             onAddItem={onAddItem}
@@ -429,6 +430,7 @@ function ThingRow({
 
 function ItemsSection({
   thingId,
+  thingName,
   items,
   catalogNames,
   onAddItem,
@@ -436,6 +438,7 @@ function ItemsSection({
   onRemoveItem,
 }: {
   thingId: string
+  thingName: string
   items: ThingItemRow[]
   catalogNames: string[]
   onAddItem: (thingId: string, name: string) => void
@@ -458,9 +461,18 @@ function ItemsSection({
       </Text>
       <Stack gap={6}>
         {items.length === 0 && (
-          <Text size="xs" c="dimmed">
-            No items yet. Add what you need to buy for this thing.
-          </Text>
+          <Group gap="xs" align="center">
+            <Text size="xs" c="dimmed">
+              No items yet.
+            </Text>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() => onAddItem(thingId, thingName)}
+            >
+              This thing is a single item
+            </Button>
+          </Group>
         )}
         {items.map((it) => (
           <Group key={it.catalogItemId} gap="xs" wrap="nowrap">
