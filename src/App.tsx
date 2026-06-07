@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Button, Container, Group, Modal, Tabs, Text, Title } from '@mantine/core'
+import { Container, Group, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
 import { CatalogView } from './catalog/CatalogView'
@@ -9,10 +9,9 @@ import { newId } from './id'
 import type { CatalogItem, Thing } from './types'
 
 export default function App() {
-  const { data, setData, exportJson, importJson, resetToSeed } = useDataset()
+  const { data, setData, exportJson, importJson } = useDataset()
   const [activeTab, setActiveTab] = useState<string | null>('brainstorm')
   const [focusThingId, setFocusThingId] = useState<string | null>(null)
-  const [resetOpen, setResetOpen] = useState(false)
 
   const jumpToThing = useCallback((thingId: string) => {
     setActiveTab('brainstorm')
@@ -257,41 +256,12 @@ export default function App() {
         </Tabs.Panel>
       </Tabs>
 
-      <Group
-        justify="space-between"
-        mt="xl"
-        pt="md"
-        style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
-      >
+      <Group mt="xl" pt="md" style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
         <Text size="xs" c="dimmed">
           {data.things.length} things · {data.catalogItems.length} catalog items ·{' '}
           {data.thingItems.length} item links
         </Text>
-        <Button size="xs" variant="subtle" color="red" onClick={() => setResetOpen(true)}>
-          Reset to seed
-        </Button>
       </Group>
-
-      <Modal opened={resetOpen} onClose={() => setResetOpen(false)} title="Reset to seed" centered>
-        <Text mb="md">
-          Discard <strong>all</strong> current data and reload the original seed? Export a backup
-          first if you want to keep it. This can’t be undone.
-        </Text>
-        <Group justify="flex-end">
-          <Button variant="default" onClick={() => setResetOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            color="red"
-            onClick={() => {
-              resetToSeed()
-              setResetOpen(false)
-            }}
-          >
-            Reset
-          </Button>
-        </Group>
-      </Modal>
     </Container>
   )
 }
