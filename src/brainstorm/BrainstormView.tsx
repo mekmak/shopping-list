@@ -16,6 +16,7 @@ import {
   Textarea,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core'
 import type { Category, CatalogItem, Thing, ThingItem } from '../types'
 
@@ -187,6 +188,7 @@ export function BrainstormView(props: BrainstormViewProps) {
         {categories.map((cat) => {
           const catThings = visible.filter((t) => t.category === cat.name)
           if (searching && catThings.length === 0) return null
+          const catEmpty = catThings.filter((t) => !itemsByThing.has(t.id)).length
           const catOpen = isCatOpen(cat.name)
           return (
             <Box key={cat.name}>
@@ -197,6 +199,13 @@ export function BrainstormView(props: BrainstormViewProps) {
                   <Badge variant="light" color="gray">
                     {catThings.length}
                   </Badge>
+                  {catEmpty > 0 && (
+                    <Tooltip label="things with no items yet" withinPortal>
+                      <Badge variant="light" color="orange">
+                        {catEmpty} no items
+                      </Badge>
+                    </Tooltip>
+                  )}
                 </UnstyledToggle>
                 <RowMenu
                   onRename={() => setDialog({ kind: 'renameCategory', category: cat.name })}
@@ -209,6 +218,7 @@ export function BrainstormView(props: BrainstormViewProps) {
                   {cat.subCategories.map((sub) => {
                     const subThings = catThings.filter((t) => t.subCategory === sub)
                     if (searching && subThings.length === 0) return null
+                    const subEmpty = subThings.filter((t) => !itemsByThing.has(t.id)).length
                     const subKey = subKeyOf(cat.name, sub)
                     const subOpen = isSubOpen(subKey)
                     return (
@@ -220,6 +230,13 @@ export function BrainstormView(props: BrainstormViewProps) {
                             <Badge variant="light" color="gray" size="sm">
                               {subThings.length}
                             </Badge>
+                            {subEmpty > 0 && (
+                              <Tooltip label="things with no items yet" withinPortal>
+                                <Badge variant="light" color="orange" size="sm">
+                                  {subEmpty} no items
+                                </Badge>
+                              </Tooltip>
+                            )}
                           </UnstyledToggle>
                           <RowMenu
                             onRename={() =>
