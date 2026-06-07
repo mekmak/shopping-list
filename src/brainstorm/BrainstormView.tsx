@@ -202,7 +202,7 @@ export function BrainstormView(props: BrainstormViewProps) {
                   {catEmpty > 0 && (
                     <Tooltip label="things with no items yet" withinPortal>
                       <Badge variant="light" color="orange">
-                        {catEmpty} no items
+                        {catEmpty}
                       </Badge>
                     </Tooltip>
                   )}
@@ -233,7 +233,7 @@ export function BrainstormView(props: BrainstormViewProps) {
                             {subEmpty > 0 && (
                               <Tooltip label="things with no items yet" withinPortal>
                                 <Badge variant="light" color="orange" size="sm">
-                                  {subEmpty} no items
+                                  {subEmpty}
                                 </Badge>
                               </Tooltip>
                             )}
