@@ -77,5 +77,33 @@ export function useDataset() {
     setData(SEED_DATA)
   }
 
-  return { data, setData, resetToSeed }
+  /** Serialize the full dataset for a backup file. */
+  function exportJson(): string {
+    return JSON.stringify(data, null, 2)
+  }
+
+  /** Replace all data from a backup file's JSON text. */
+  function importJson(text: string): { ok: true } | { ok: false; error: string } {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return { ok: false, error: 'That file is not valid JSON.' }
+    }
+    if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as RawDataset).things)) {
+      return { ok: false, error: "That doesn't look like a backup (no \"things\" array)." }
+    }
+    const p = parsed as Partial<RawDataset>
+    const raw: RawDataset = {
+      version: typeof p.version === 'number' ? p.version : 1,
+      categories: Array.isArray(p.categories) ? p.categories : undefined,
+      things: Array.isArray(p.things) ? p.things : [],
+      catalogItems: Array.isArray(p.catalogItems) ? p.catalogItems : [],
+      thingItems: Array.isArray(p.thingItems) ? p.thingItems : [],
+    }
+    setData(normalizeDataset(raw))
+    return { ok: true }
+  }
+
+  return { data, setData, resetToSeed, exportJson, importJson }
 }

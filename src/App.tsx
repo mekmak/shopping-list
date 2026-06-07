@@ -1,6 +1,7 @@
-import { Container, Tabs, Text, Title } from '@mantine/core'
+import { Container, Group, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
+import { BackupControls } from './BackupControls'
 import { newId } from './id'
 import type { Thing } from './types'
 
@@ -16,7 +17,7 @@ function Placeholder({ title }: { title: string }) {
 }
 
 export default function App() {
-  const { data, setData } = useDataset()
+  const { data, setData, exportJson, importJson } = useDataset()
 
   const updateThing = (id: string, patch: Partial<Thing>) =>
     setData((d) => ({
@@ -113,9 +114,10 @@ export default function App() {
 
   return (
     <Container size="md" py="lg">
-      <Title order={3} mb="md">
-        Event Shopping List
-      </Title>
+      <Group justify="space-between" align="center" mb="md">
+        <Title order={3}>Event Shopping List</Title>
+        <BackupControls getExport={exportJson} onImport={importJson} />
+      </Group>
 
       <Tabs defaultValue="brainstorm" keepMounted={false}>
         <Tabs.List mb="lg">
