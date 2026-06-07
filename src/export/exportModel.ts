@@ -5,12 +5,15 @@ export type Block =
   | { type: 'heading'; level: 1 | 2 | 3; text: string; sub?: string }
   | { type: 'note'; text: string }
   | { type: 'item'; text: string }
+  | { type: 'subitem'; text: string }
 
 export interface ExportOptions {
   amounts: boolean
   notes: boolean
   skipEmpty: boolean
   checkboxes: boolean
+  /** By-store only: list the things each merged item is for, under it. */
+  sources: boolean
 }
 
 export const DEFAULT_OPTIONS: ExportOptions = {
@@ -18,6 +21,7 @@ export const DEFAULT_OPTIONS: ExportOptions = {
   notes: true,
   skipEmpty: true,
   checkboxes: true,
+  sources: true,
 }
 
 const UNKNOWN_STORE = 'Unknown store'
@@ -51,10 +55,18 @@ function itemLabel(name: string, amount: string, opts: ExportOptions): string {
   return opts.amounts && amount.trim() ? `${name} — ${amount.trim()}` : name
 }
 
+interface StoreItem {
+  name: string
+  unit: string
+  amounts: string[]
+  sources: { name: string; amount: string }[]
+}
+
 /** By Store: items merged across things, amounts summed, grouped by store. */
 export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
   const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
-  const byStore = new Map<string, Map<string, { name: string; unit: string; amounts: string[] }>>()
+  const thingById = new Map(data.things.map((t) => [t.id, t]))
+  const byStore = new Map<string, Map<string, StoreItem>>()
 
   for (const ti of data.thingItems) {
     const ci = catalogById.get(ti.catalogItemId)
@@ -65,8 +77,9 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
       items = new Map()
       byStore.set(store, items)
     }
-    const entry = items.get(ci.id) ?? { name: ci.name, unit: ci.unit, amounts: [] }
+    const entry = items.get(ci.id) ?? { name: ci.name, unit: ci.unit, amounts: [], sources: [] }
     entry.amounts.push(ti.amount)
+    entry.sources.push({ name: thingById.get(ti.thingId)?.name ?? '(unknown)', amount: ti.amount })
     items.set(ci.id, entry)
   }
 
@@ -82,6 +95,12 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
     const items = [...byStore.get(store)!.values()].sort((a, b) => a.name.localeCompare(b.name))
     for (const it of items) {
       blocks.push({ type: 'item', text: itemLabel(it.name, combineAmounts(it.amounts, it.unit), opts) })
+      if (opts.sources && it.sources.length > 0) {
+        const list = it.sources
+          .map((s) => (opts.amounts && s.amount.trim() ? `${s.name} (${s.amount.trim()})` : s.name))
+          .join(', ')
+        blocks.push({ type: 'subitem', text: `for ${list}` })
+      }
     }
   }
   return blocks
@@ -151,6 +170,8 @@ export function blocksToMarkdown(blocks: Block[], opts: ExportOptions): string {
       lines.push(`${'#'.repeat(b.level)} ${b.text}${b.sub ? `  _(${b.sub})_` : ''}`)
     } else if (b.type === 'note') {
       lines.push(`> ${b.text}`)
+    } else if (b.type === 'subitem') {
+      lines.push(`  - ${b.text}`)
     } else {
       lines.push(`- ${opts.checkboxes ? '[ ] ' : ''}${b.text}`)
     }

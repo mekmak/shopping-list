@@ -55,6 +55,13 @@ function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean 
             </Text>
           )
         }
+        if (b.type === 'subitem') {
+          return (
+            <Text key={i} c="dimmed" size="xs" pl="xl">
+              {b.text}
+            </Text>
+          )
+        }
         return (
           <Text key={i} size="sm">
             {checkboxes ? '☐ ' : '• '}
@@ -135,6 +142,13 @@ export function ExportView({ data }: { data: Dataset }) {
           checked={opts.skipEmpty}
           disabled={pivot === 'store'}
           onChange={(e) => setOpt('skipEmpty', e.currentTarget.checked)}
+        />
+        <Checkbox
+          size="xs"
+          label="Source things"
+          checked={opts.sources}
+          disabled={pivot !== 'store'}
+          onChange={(e) => setOpt('sources', e.currentTarget.checked)}
         />
       </Group>
 
