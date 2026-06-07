@@ -22,8 +22,10 @@ export function BackupControls({ getExport, onImport }: BackupControlsProps) {
   const [error, setError] = useState<string | null>(null)
 
   function handleExport() {
-    const date = new Date().toISOString().slice(0, 10)
-    downloadJson(`shopping-list-backup-${date}.json`, getExport())
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`
+    downloadJson(`shopping-list-backup-${stamp}.json`, getExport())
   }
 
   async function handleFile(file: File) {
