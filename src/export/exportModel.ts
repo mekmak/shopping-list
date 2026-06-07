@@ -59,7 +59,7 @@ interface StoreItem {
   name: string
   unit: string
   amounts: string[]
-  sources: { name: string; amount: string }[]
+  sources: { name: string; amount: string; notes: string }[]
 }
 
 /** By Store: items merged across things, amounts summed, grouped by store. */
@@ -78,8 +78,13 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
       byStore.set(store, items)
     }
     const entry = items.get(ci.id) ?? { name: ci.name, unit: ci.unit, amounts: [], sources: [] }
+    const t = thingById.get(ti.thingId)
     entry.amounts.push(ti.amount)
-    entry.sources.push({ name: thingById.get(ti.thingId)?.name ?? '(unknown)', amount: ti.amount })
+    entry.sources.push({
+      name: t?.name ?? '(unknown)',
+      amount: ti.amount,
+      notes: t?.notes ?? '',
+    })
     items.set(ci.id, entry)
   }
 
@@ -95,11 +100,13 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
     const items = [...byStore.get(store)!.values()].sort((a, b) => a.name.localeCompare(b.name))
     for (const it of items) {
       blocks.push({ type: 'item', text: itemLabel(it.name, combineAmounts(it.amounts, it.unit), opts) })
-      if (opts.sources && it.sources.length > 0) {
-        const list = it.sources
-          .map((s) => (opts.amounts && s.amount.trim() ? `${s.name} (${s.amount.trim()})` : s.name))
-          .join(', ')
-        blocks.push({ type: 'subitem', text: `for ${list}` })
+      if (opts.sources) {
+        for (const s of it.sources) {
+          let text = s.name
+          if (opts.amounts && s.amount.trim()) text += ` (${s.amount.trim()})`
+          if (opts.notes && s.notes.trim()) text += ` — ${s.notes.trim().replace(/\s*\n\s*/g, ' ')}`
+          blocks.push({ type: 'subitem', text })
+        }
       }
     }
   }

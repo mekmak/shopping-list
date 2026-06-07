@@ -133,7 +133,7 @@ export function ExportView({ data }: { data: Dataset }) {
           size="xs"
           label="Notes"
           checked={opts.notes}
-          disabled={pivot === 'store'}
+          disabled={pivot === 'store' && !opts.sources}
           onChange={(e) => setOpt('notes', e.currentTarget.checked)}
         />
         <Checkbox
