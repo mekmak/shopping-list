@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { useDisclosure } from '@mantine/hooks'
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
   Collapse,
   Group,
+  Menu,
   Modal,
   Select,
   Stack,
@@ -14,63 +16,31 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
-import type { Thing } from '../types'
+import type { Category, Thing } from '../types'
 
 interface BrainstormViewProps {
+  categories: Category[]
   things: Thing[]
   onUpdateThing: (id: string, patch: Partial<Thing>) => void
   onAddThing: (category: string, subCategory: string, name: string) => void
   onDeleteThing: (id: string) => void
-}
-
-interface SubGroup {
-  subCategory: string
-  things: Thing[]
-}
-interface CatGroup {
-  category: string
-  count: number
-  subGroups: SubGroup[]
+  onAddCategory: (name: string) => void
+  onRenameCategory: (oldName: string, newName: string) => void
+  onDeleteCategory: (name: string, moveTo?: string) => void
+  onAddSubCategory: (category: string, name: string) => void
+  onRenameSubCategory: (category: string, oldName: string, newName: string) => void
+  onDeleteSubCategory: (category: string, name: string, moveTo?: string) => void
 }
 
 const SEP = ' › '
 const subKeyOf = (category: string, subCategory: string) => `${category}${SEP}${subCategory}`
 
-/** Group things by category → subcategory, preserving first-appearance order. */
-function groupThings(things: Thing[]): CatGroup[] {
-  const cats: CatGroup[] = []
-  const byCat = new Map<string, CatGroup>()
-  for (const t of things) {
-    let cat = byCat.get(t.category)
-    if (!cat) {
-      cat = { category: t.category, count: 0, subGroups: [] }
-      byCat.set(t.category, cat)
-      cats.push(cat)
-    }
-    cat.count++
-    let sub = cat.subGroups.find((s) => s.subCategory === t.subCategory)
-    if (!sub) {
-      sub = { subCategory: t.subCategory, things: [] }
-      cat.subGroups.push(sub)
-    }
-    sub.things.push(t)
-  }
-  return cats
-}
-
-/** Distinct category › subcategory pairs (for the move dropdown), in order. */
-function groupOptions(things: Thing[]): string[] {
-  const seen = new Set<string>()
-  const opts: string[] = []
-  for (const t of things) {
-    const key = subKeyOf(t.category, t.subCategory)
-    if (!seen.has(key)) {
-      seen.add(key)
-      opts.push(key)
-    }
-  }
-  return opts
-}
+type Dialog =
+  | { kind: 'renameCategory'; category: string }
+  | { kind: 'deleteCategory'; category: string }
+  | { kind: 'renameSubCategory'; category: string; subCategory: string }
+  | { kind: 'deleteSubCategory'; category: string; subCategory: string }
+  | null
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -80,25 +50,25 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function BrainstormView({
-  things,
-  onUpdateThing,
-  onAddThing,
-  onDeleteThing,
-}: BrainstormViewProps) {
+export function BrainstormView(props: BrainstormViewProps) {
+  const { categories, things } = props
   const [query, setQuery] = useState('')
   const [openCats, setOpenCats] = useState<Set<string>>(
-    () => new Set(groupThings(things).map((g) => g.category)),
+    () => new Set(categories.map((c) => c.name)),
   )
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set())
   const [openThings, setOpenThings] = useState<Set<string>>(new Set())
+  const [dialog, setDialog] = useState<Dialog>(null)
 
   const q = query.trim().toLowerCase()
-  const filtered = q ? things.filter((t) => t.name.toLowerCase().includes(q)) : things
-  const groups = groupThings(filtered)
-  const moveTargets = groupOptions(things)
-
   const searching = q.length > 0
+  const visible = searching ? things.filter((t) => t.name.toLowerCase().includes(q)) : things
+
+  // Move targets for the per-thing move dropdown (includes empty groups).
+  const moveTargets = categories.flatMap((c) =>
+    c.subCategories.map((s) => subKeyOf(c.name, s)),
+  )
+
   const isCatOpen = (c: string) => searching || openCats.has(c)
   const isSubOpen = (k: string) => searching || openSubs.has(k)
 
@@ -110,9 +80,9 @@ export function BrainstormView({
   }
 
   function expandAll() {
-    setOpenCats(new Set(groups.map((g) => g.category)))
+    setOpenCats(new Set(categories.map((c) => c.name)))
     setOpenSubs(
-      new Set(groups.flatMap((g) => g.subGroups.map((s) => subKeyOf(g.category, s.subCategory)))),
+      new Set(categories.flatMap((c) => c.subCategories.map((s) => subKeyOf(c.name, s)))),
     )
   }
   function collapseAll() {
@@ -144,68 +114,168 @@ export function BrainstormView({
         </Group>
       </Group>
 
-      {groups.length === 0 ? (
-        <Text c="dimmed">No things match “{query}”.</Text>
-      ) : (
-        <Stack gap="xs">
-          {groups.map((cat) => {
-            const catOpen = isCatOpen(cat.category)
-            return (
-              <Box key={cat.category}>
-                <UnstyledToggle onClick={() => toggle(openCats, setOpenCats, cat.category)}>
+      <Stack gap="xs">
+        {categories.map((cat) => {
+          const catThings = visible.filter((t) => t.category === cat.name)
+          if (searching && catThings.length === 0) return null
+          const catOpen = isCatOpen(cat.name)
+          return (
+            <Box key={cat.name}>
+              <Group gap="xs" wrap="nowrap">
+                <UnstyledToggle onClick={() => toggle(openCats, setOpenCats, cat.name)}>
                   <Chevron open={catOpen} />
-                  <Text fw={700}>{cat.category}</Text>
+                  <Text fw={700}>{cat.name}</Text>
                   <Badge variant="light" color="gray">
-                    {cat.count}
+                    {catThings.length}
                   </Badge>
                 </UnstyledToggle>
+                <RowMenu
+                  onRename={() => setDialog({ kind: 'renameCategory', category: cat.name })}
+                  onDelete={() => setDialog({ kind: 'deleteCategory', category: cat.name })}
+                />
+              </Group>
 
-                <Collapse in={catOpen}>
-                  <Stack gap={4} pl="lg" pt={4}>
-                    {cat.subGroups.map((sub) => {
-                      const subKey = subKeyOf(cat.category, sub.subCategory)
-                      const subOpen = isSubOpen(subKey)
-                      return (
-                        <Box key={subKey}>
+              <Collapse in={catOpen}>
+                <Stack gap={4} pl="lg" pt={4}>
+                  {cat.subCategories.map((sub) => {
+                    const subThings = catThings.filter((t) => t.subCategory === sub)
+                    if (searching && subThings.length === 0) return null
+                    const subKey = subKeyOf(cat.name, sub)
+                    const subOpen = isSubOpen(subKey)
+                    return (
+                      <Box key={subKey}>
+                        <Group gap="xs" wrap="nowrap">
                           <UnstyledToggle onClick={() => toggle(openSubs, setOpenSubs, subKey)}>
                             <Chevron open={subOpen} />
-                            <Text fw={500}>{sub.subCategory}</Text>
+                            <Text fw={500}>{sub}</Text>
                             <Badge variant="light" color="gray" size="sm">
-                              {sub.things.length}
+                              {subThings.length}
                             </Badge>
                           </UnstyledToggle>
+                          <RowMenu
+                            onRename={() =>
+                              setDialog({
+                                kind: 'renameSubCategory',
+                                category: cat.name,
+                                subCategory: sub,
+                              })
+                            }
+                            onDelete={() =>
+                              setDialog({
+                                kind: 'deleteSubCategory',
+                                category: cat.name,
+                                subCategory: sub,
+                              })
+                            }
+                          />
+                        </Group>
 
-                          <Collapse in={subOpen}>
-                            <Stack gap={2} pl="lg" pt={2}>
-                              {sub.things.map((t) => (
-                                <ThingRow
-                                  key={t.id}
-                                  thing={t}
-                                  open={openThings.has(t.id)}
-                                  moveTargets={moveTargets}
-                                  onToggle={() => toggle(openThings, setOpenThings, t.id)}
-                                  onUpdateThing={onUpdateThing}
-                                  onDeleteThing={onDeleteThing}
-                                />
-                              ))}
-                              <QuickAddThing
-                                onAdd={(name) =>
-                                  onAddThing(cat.category, sub.subCategory, name)
-                                }
+                        <Collapse in={subOpen}>
+                          <Stack gap={2} pl="lg" pt={2}>
+                            {subThings.map((t) => (
+                              <ThingRow
+                                key={t.id}
+                                thing={t}
+                                open={openThings.has(t.id)}
+                                moveTargets={moveTargets}
+                                onToggle={() => toggle(openThings, setOpenThings, t.id)}
+                                onUpdateThing={props.onUpdateThing}
+                                onDeleteThing={props.onDeleteThing}
                               />
-                            </Stack>
-                          </Collapse>
-                        </Box>
-                      )
-                    })}
-                  </Stack>
-                </Collapse>
-              </Box>
-            )
-          })}
-        </Stack>
+                            ))}
+                            {!searching && (
+                              <QuickAdd
+                                placeholder="+ Add a thing…"
+                                onAdd={(name) => props.onAddThing(cat.name, sub, name)}
+                              />
+                            )}
+                          </Stack>
+                        </Collapse>
+                      </Box>
+                    )
+                  })}
+                  {!searching && (
+                    <QuickAdd
+                      placeholder="+ Add a subcategory…"
+                      onAdd={(name) => props.onAddSubCategory(cat.name, name)}
+                    />
+                  )}
+                </Stack>
+              </Collapse>
+            </Box>
+          )
+        })}
+        {!searching && (
+          <QuickAdd placeholder="+ Add a category…" onAdd={(name) => props.onAddCategory(name)} />
+        )}
+      </Stack>
+
+      {/* Rename / delete dialogs */}
+      {dialog?.kind === 'renameCategory' && (
+        <RenameModal
+          title="Rename category"
+          initial={dialog.category}
+          onClose={() => setDialog(null)}
+          onSave={(name) => props.onRenameCategory(dialog.category, name)}
+        />
+      )}
+      {dialog?.kind === 'renameSubCategory' && (
+        <RenameModal
+          title="Rename subcategory"
+          initial={dialog.subCategory}
+          onClose={() => setDialog(null)}
+          onSave={(name) => props.onRenameSubCategory(dialog.category, dialog.subCategory, name)}
+        />
+      )}
+      {dialog?.kind === 'deleteCategory' && (
+        <DeleteGroupModal
+          title="Delete category"
+          label={dialog.category}
+          count={things.filter((t) => t.category === dialog.category).length}
+          targetLabel="Move its things to category"
+          targets={categories.map((c) => c.name).filter((n) => n !== dialog.category)}
+          onClose={() => setDialog(null)}
+          onConfirm={(moveTo) => props.onDeleteCategory(dialog.category, moveTo)}
+        />
+      )}
+      {dialog?.kind === 'deleteSubCategory' && (
+        <DeleteGroupModal
+          title="Delete subcategory"
+          label={subKeyOf(dialog.category, dialog.subCategory)}
+          count={
+            things.filter(
+              (t) => t.category === dialog.category && t.subCategory === dialog.subCategory,
+            ).length
+          }
+          targetLabel="Move its things to subcategory"
+          targets={(categories.find((c) => c.name === dialog.category)?.subCategories ?? []).filter(
+            (s) => s !== dialog.subCategory,
+          )}
+          onClose={() => setDialog(null)}
+          onConfirm={(moveTo) =>
+            props.onDeleteSubCategory(dialog.category, dialog.subCategory, moveTo)
+          }
+        />
       )}
     </div>
+  )
+}
+
+function RowMenu({ onRename, onDelete }: { onRename: () => void; onDelete: () => void }) {
+  return (
+    <Menu shadow="md" position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon variant="subtle" color="gray" aria-label="Group actions">
+          ⋯
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item onClick={onRename}>Rename…</Menu.Item>
+        <Menu.Item color="red" onClick={onDelete}>
+          Delete…
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
   )
 }
 
@@ -297,8 +367,118 @@ function ThingRow({
   )
 }
 
-/** Inline "add a thing" input shown at the end of each subcategory. */
-function QuickAddThing({ onAdd }: { onAdd: (name: string) => void }) {
+function RenameModal({
+  title,
+  initial,
+  onSave,
+  onClose,
+}: {
+  title: string
+  initial: string
+  onSave: (name: string) => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState(initial)
+  const trimmed = name.trim()
+  function save() {
+    if (trimmed) onSave(trimmed)
+    onClose()
+  }
+  return (
+    <Modal opened onClose={onClose} title={title} centered>
+      <TextInput
+        data-autofocus
+        value={name}
+        onChange={(e) => setName(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+        }}
+      />
+      <Group justify="flex-end" mt="md">
+        <Button variant="default" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={!trimmed}>
+          Save
+        </Button>
+      </Group>
+    </Modal>
+  )
+}
+
+function DeleteGroupModal({
+  title,
+  label,
+  count,
+  targets,
+  targetLabel,
+  onConfirm,
+  onClose,
+}: {
+  title: string
+  label: string
+  count: number
+  targets: string[]
+  targetLabel: string
+  onConfirm: (moveTo?: string) => void
+  onClose: () => void
+}) {
+  const [moveTo, setMoveTo] = useState<string | null>(null)
+  const needsMove = count > 0
+  const canMove = targets.length > 0
+  const ready = !needsMove || (canMove && moveTo !== null)
+
+  return (
+    <Modal opened onClose={onClose} title={title} centered>
+      {needsMove ? (
+        canMove ? (
+          <>
+            <Text mb="sm">
+              <strong>{label}</strong> has {count} thing{count === 1 ? '' : 's'}. Choose where
+              to move them, then delete.
+            </Text>
+            <Select
+              label={targetLabel}
+              data={targets}
+              value={moveTo}
+              onChange={setMoveTo}
+              placeholder="Select destination"
+              comboboxProps={{ withinPortal: true }}
+            />
+          </>
+        ) : (
+          <Text mb="sm" c="red">
+            <strong>{label}</strong> has {count} thing{count === 1 ? '' : 's'} and there's
+            nowhere to move them. Create another destination first, or delete/move the things
+            yourself.
+          </Text>
+        )
+      ) : (
+        <Text mb="sm">
+          Delete <strong>{label}</strong>? It has no things.
+        </Text>
+      )}
+      <Group justify="flex-end" mt="md">
+        <Button variant="default" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          color="red"
+          disabled={!ready}
+          onClick={() => {
+            onConfirm(needsMove ? moveTo ?? undefined : undefined)
+            onClose()
+          }}
+        >
+          Delete
+        </Button>
+      </Group>
+    </Modal>
+  )
+}
+
+/** Inline "add" input (things, subcategories, categories). */
+function QuickAdd({ placeholder, onAdd }: { placeholder: string; onAdd: (name: string) => void }) {
   const [name, setName] = useState('')
   function submit() {
     const trimmed = name.trim()
@@ -309,7 +489,7 @@ function QuickAddThing({ onAdd }: { onAdd: (name: string) => void }) {
   return (
     <Group gap="xs" pt={2}>
       <TextInput
-        placeholder="+ Add a thing…"
+        placeholder={placeholder}
         size="xs"
         variant="filled"
         value={name}
@@ -338,7 +518,8 @@ function UnstyledToggle({ onClick, children }: { onClick: () => void; children: 
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        width: '100%',
+        flex: 1,
+        minWidth: 0,
       }}
     >
       {children}

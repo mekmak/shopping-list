@@ -37,6 +37,80 @@ export default function App() {
       thingItems: d.thingItems.filter((ti) => ti.thingId !== id),
     }))
 
+  const addCategory = (name: string) =>
+    setData((d) =>
+      d.categories.some((c) => c.name === name)
+        ? d
+        : { ...d, categories: [...d.categories, { name, subCategories: [] }] },
+    )
+
+  const renameCategory = (oldName: string, newName: string) =>
+    setData((d) => ({
+      ...d,
+      categories: d.categories.map((c) => (c.name === oldName ? { ...c, name: newName } : c)),
+      things: d.things.map((t) => (t.category === oldName ? { ...t, category: newName } : t)),
+    }))
+
+  /** Delete a category; if non-empty, move its things into `moveTo` first. */
+  const deleteCategory = (name: string, moveTo?: string) =>
+    setData((d) => {
+      let categories = d.categories
+      let things = d.things
+      if (moveTo) {
+        const movedSubs = d.things.filter((t) => t.category === name).map((t) => t.subCategory)
+        categories = categories.map((c) =>
+          c.name === moveTo
+            ? { ...c, subCategories: [...new Set([...c.subCategories, ...movedSubs])] }
+            : c,
+        )
+        things = d.things.map((t) => (t.category === name ? { ...t, category: moveTo } : t))
+      }
+      return { ...d, categories: categories.filter((c) => c.name !== name), things }
+    })
+
+  const addSubCategory = (category: string, name: string) =>
+    setData((d) => ({
+      ...d,
+      categories: d.categories.map((c) =>
+        c.name === category && !c.subCategories.includes(name)
+          ? { ...c, subCategories: [...c.subCategories, name] }
+          : c,
+      ),
+    }))
+
+  const renameSubCategory = (category: string, oldName: string, newName: string) =>
+    setData((d) => ({
+      ...d,
+      categories: d.categories.map((c) =>
+        c.name === category
+          ? { ...c, subCategories: c.subCategories.map((s) => (s === oldName ? newName : s)) }
+          : c,
+      ),
+      things: d.things.map((t) =>
+        t.category === category && t.subCategory === oldName
+          ? { ...t, subCategory: newName }
+          : t,
+      ),
+    }))
+
+  /** Delete a subcategory; if non-empty, move its things into `moveTo` first. */
+  const deleteSubCategory = (category: string, name: string, moveTo?: string) =>
+    setData((d) => ({
+      ...d,
+      categories: d.categories.map((c) =>
+        c.name === category
+          ? { ...c, subCategories: c.subCategories.filter((s) => s !== name) }
+          : c,
+      ),
+      things: moveTo
+        ? d.things.map((t) =>
+            t.category === category && t.subCategory === name
+              ? { ...t, subCategory: moveTo }
+              : t,
+          )
+        : d.things,
+    }))
+
   return (
     <Container size="md" py="lg">
       <Title order={3} mb="md">
@@ -52,10 +126,17 @@ export default function App() {
 
         <Tabs.Panel value="brainstorm">
           <BrainstormView
+            categories={data.categories}
             things={data.things}
             onUpdateThing={updateThing}
             onAddThing={addThing}
             onDeleteThing={deleteThing}
+            onAddCategory={addCategory}
+            onRenameCategory={renameCategory}
+            onDeleteCategory={deleteCategory}
+            onAddSubCategory={addSubCategory}
+            onRenameSubCategory={renameSubCategory}
+            onDeleteSubCategory={deleteSubCategory}
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">

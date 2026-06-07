@@ -25,9 +25,17 @@ export interface ThingItem {
   amount: string
 }
 
+/** An ordered category with its ordered subcategories (the taxonomy). */
+export interface Category {
+  name: string
+  subCategories: string[]
+}
+
 /** The full app dataset (also the shape of seed.json and JSON backups). */
 export interface Dataset {
   version: number
+  /** Ordered taxonomy; allows empty groups to exist before things are added. */
+  categories: Category[]
   things: Thing[]
   catalogItems: CatalogItem[]
   thingItems: ThingItem[]
