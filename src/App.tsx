@@ -4,7 +4,7 @@ import { BrainstormView } from './brainstorm/BrainstormView'
 import { CatalogView } from './catalog/CatalogView'
 import { BackupControls } from './BackupControls'
 import { newId } from './id'
-import type { Thing } from './types'
+import type { CatalogItem, Thing } from './types'
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -149,6 +149,12 @@ export default function App() {
       ),
     }))
 
+  const updateCatalogItem = (id: string, patch: Partial<CatalogItem>) =>
+    setData((d) => ({
+      ...d,
+      catalogItems: d.catalogItems.map((ci) => (ci.id === id ? { ...ci, ...patch } : ci)),
+    }))
+
   return (
     <Container size="md" py="lg">
       <Group justify="space-between" align="center" mb="md">
@@ -184,7 +190,11 @@ export default function App() {
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
-          <CatalogView catalogItems={data.catalogItems} thingItems={data.thingItems} />
+          <CatalogView
+            catalogItems={data.catalogItems}
+            thingItems={data.thingItems}
+            onUpdateCatalogItem={updateCatalogItem}
+          />
         </Tabs.Panel>
         <Tabs.Panel value="export">
           <Placeholder title="Export" />
