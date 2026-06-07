@@ -1,6 +1,7 @@
 import { Container, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
+import { newId } from './id'
 import type { Thing } from './types'
 
 function Placeholder({ title }: { title: string }) {
@@ -23,6 +24,19 @@ export default function App() {
       things: d.things.map((t) => (t.id === id ? { ...t, ...patch } : t)),
     }))
 
+  const addThing = (category: string, subCategory: string, name: string) =>
+    setData((d) => ({
+      ...d,
+      things: [...d.things, { id: newId(), name, category, subCategory, notes: '' }],
+    }))
+
+  const deleteThing = (id: string) =>
+    setData((d) => ({
+      ...d,
+      things: d.things.filter((t) => t.id !== id),
+      thingItems: d.thingItems.filter((ti) => ti.thingId !== id),
+    }))
+
   return (
     <Container size="md" py="lg">
       <Title order={3} mb="md">
@@ -37,7 +51,12 @@ export default function App() {
         </Tabs.List>
 
         <Tabs.Panel value="brainstorm">
-          <BrainstormView things={data.things} onUpdateThing={updateThing} />
+          <BrainstormView
+            things={data.things}
+            onUpdateThing={updateThing}
+            onAddThing={addThing}
+            onDeleteThing={deleteThing}
+          />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
           <Placeholder title="Catalog" />
