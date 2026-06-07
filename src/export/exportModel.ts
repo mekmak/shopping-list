@@ -87,6 +87,61 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
   return blocks
 }
 
+/** By Thing: each thing (with notes) and its items; no merging. */
+export function buildThingBlocks(data: Dataset, opts: ExportOptions): Block[] {
+  const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
+  const blocks: Block[] = []
+  for (const t of data.things) {
+    const items = data.thingItems.filter((ti) => ti.thingId === t.id)
+    if (opts.skipEmpty && items.length === 0) continue
+    blocks.push({
+      type: 'heading',
+      level: 2,
+      text: t.name,
+      sub: `${t.category} › ${t.subCategory}`,
+    })
+    if (opts.notes && t.notes.trim()) blocks.push({ type: 'note', text: t.notes.trim() })
+    for (const ti of items) {
+      const name = catalogById.get(ti.catalogItemId)?.name ?? '(unknown)'
+      blocks.push({ type: 'item', text: itemLabel(name, ti.amount, opts) })
+    }
+  }
+  return blocks
+}
+
+/** By Category → Subcategory: things grouped under their taxonomy headings. */
+export function buildCategoryBlocks(data: Dataset, opts: ExportOptions): Block[] {
+  const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
+  const hasItems = (thingId: string) => data.thingItems.some((ti) => ti.thingId === thingId)
+  const blocks: Block[] = []
+
+  for (const cat of data.categories) {
+    const catBlocks: Block[] = []
+    for (const sub of cat.subCategories) {
+      const subThings = data.things.filter(
+        (t) =>
+          t.category === cat.name &&
+          t.subCategory === sub &&
+          (!opts.skipEmpty || hasItems(t.id)),
+      )
+      if (subThings.length === 0) continue
+      catBlocks.push({ type: 'heading', level: 2, text: sub })
+      for (const t of subThings) {
+        catBlocks.push({ type: 'heading', level: 3, text: t.name })
+        if (opts.notes && t.notes.trim()) catBlocks.push({ type: 'note', text: t.notes.trim() })
+        for (const ti of data.thingItems.filter((x) => x.thingId === t.id)) {
+          const name = catalogById.get(ti.catalogItemId)?.name ?? '(unknown)'
+          catBlocks.push({ type: 'item', text: itemLabel(name, ti.amount, opts) })
+        }
+      }
+    }
+    if (catBlocks.length === 0) continue
+    blocks.push({ type: 'heading', level: 1, text: cat.name })
+    blocks.push(...catBlocks)
+  }
+  return blocks
+}
+
 /** Serialize blocks to Markdown (task-list checkboxes optional). */
 export function blocksToMarkdown(blocks: Block[], opts: ExportOptions): string {
   const lines: string[] = []

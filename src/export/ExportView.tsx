@@ -1,12 +1,16 @@
 import { useState } from 'react'
-import { Box, Button, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Box, Button, Group, Paper, SegmentedControl, Stack, Text, Title } from '@mantine/core'
 import type { Dataset } from '../types'
 import {
   blocksToMarkdown,
+  buildCategoryBlocks,
   buildStoreBlocks,
+  buildThingBlocks,
   DEFAULT_OPTIONS,
   type Block,
 } from './exportModel'
+
+type Pivot = 'store' | 'thing' | 'category'
 
 /** Renders export blocks as a formatted preview (not raw Markdown). */
 function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean }) {
@@ -53,9 +57,15 @@ function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean 
 
 export function ExportView({ data }: { data: Dataset }) {
   const [copied, setCopied] = useState(false)
+  const [pivot, setPivot] = useState<Pivot>('store')
   const opts = DEFAULT_OPTIONS
 
-  const blocks = buildStoreBlocks(data, opts)
+  const blocks =
+    pivot === 'store'
+      ? buildStoreBlocks(data, opts)
+      : pivot === 'thing'
+        ? buildThingBlocks(data, opts)
+        : buildCategoryBlocks(data, opts)
   const markdown = blocksToMarkdown(blocks, opts)
 
   async function copy() {
@@ -71,7 +81,16 @@ export function ExportView({ data }: { data: Dataset }) {
       </Title>
 
       <Group justify="space-between" mb="md" align="center">
-        <Text fw={500}>Shopping list by store</Text>
+        <SegmentedControl
+          size="xs"
+          value={pivot}
+          onChange={(v) => setPivot(v as Pivot)}
+          data={[
+            { label: 'By store', value: 'store' },
+            { label: 'By thing', value: 'thing' },
+            { label: 'By category', value: 'category' },
+          ]}
+        />
         <Button size="xs" onClick={copy} disabled={blocks.length === 0}>
           {copied ? 'Copied!' : 'Copy Markdown'}
         </Button>
