@@ -1,6 +1,7 @@
 import { Container, Group, Tabs, Text, Title } from '@mantine/core'
 import { useDataset } from './store'
 import { BrainstormView } from './brainstorm/BrainstormView'
+import { CatalogView } from './catalog/CatalogView'
 import { BackupControls } from './BackupControls'
 import { newId } from './id'
 import type { Thing } from './types'
@@ -183,7 +184,7 @@ export default function App() {
           />
         </Tabs.Panel>
         <Tabs.Panel value="catalog">
-          <Placeholder title="Catalog" />
+          <CatalogView catalogItems={data.catalogItems} thingItems={data.thingItems} />
         </Tabs.Panel>
         <Tabs.Panel value="export">
           <Placeholder title="Export" />
