@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { Box, Button, Group, Paper, SegmentedControl, Stack, Text, Title } from '@mantine/core'
+import {
+  Box,
+  Button,
+  Checkbox,
+  Group,
+  Paper,
+  SegmentedControl,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core'
 import type { Dataset } from '../types'
 import {
   blocksToMarkdown,
@@ -8,6 +18,7 @@ import {
   buildThingBlocks,
   DEFAULT_OPTIONS,
   type Block,
+  type ExportOptions,
 } from './exportModel'
 
 type Pivot = 'store' | 'thing' | 'category'
@@ -58,7 +69,9 @@ function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean 
 export function ExportView({ data }: { data: Dataset }) {
   const [copied, setCopied] = useState(false)
   const [pivot, setPivot] = useState<Pivot>('store')
-  const opts = DEFAULT_OPTIONS
+  const [opts, setOpts] = useState<ExportOptions>(DEFAULT_OPTIONS)
+  const setOpt = (key: keyof ExportOptions, value: boolean) =>
+    setOpts((o) => ({ ...o, [key]: value }))
 
   const blocks =
     pivot === 'store'
@@ -94,6 +107,35 @@ export function ExportView({ data }: { data: Dataset }) {
         <Button size="xs" onClick={copy} disabled={blocks.length === 0}>
           {copied ? 'Copied!' : 'Copy Markdown'}
         </Button>
+      </Group>
+
+      <Group mb="md" gap="lg">
+        <Checkbox
+          size="xs"
+          label="Checkboxes"
+          checked={opts.checkboxes}
+          onChange={(e) => setOpt('checkboxes', e.currentTarget.checked)}
+        />
+        <Checkbox
+          size="xs"
+          label="Amounts"
+          checked={opts.amounts}
+          onChange={(e) => setOpt('amounts', e.currentTarget.checked)}
+        />
+        <Checkbox
+          size="xs"
+          label="Notes"
+          checked={opts.notes}
+          disabled={pivot === 'store'}
+          onChange={(e) => setOpt('notes', e.currentTarget.checked)}
+        />
+        <Checkbox
+          size="xs"
+          label="Skip things with no items"
+          checked={opts.skipEmpty}
+          disabled={pivot === 'store'}
+          onChange={(e) => setOpt('skipEmpty', e.currentTarget.checked)}
+        />
       </Group>
 
       <Paper withBorder p="md" radius="md">
