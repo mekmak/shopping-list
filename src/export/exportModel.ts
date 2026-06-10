@@ -2,15 +2,13 @@ import type { Dataset } from '../types'
 
 /** A renderable block — used for both the preview and the Markdown string. */
 export type Block =
-  | { type: 'heading'; level: 1 | 2 | 3; text: string; sub?: string }
-  | { type: 'note'; text: string }
-  | { type: 'item'; text: string }
-  | { type: 'subitem'; text: string }
+  | { type: 'heading'; level: 1 | 2 | 3; text: string }
+  | { type: 'item'; text: string; note?: string }
+  | { type: 'subitem'; text: string; note?: string }
 
 export interface ExportOptions {
   amounts: boolean
   notes: boolean
-  skipEmpty: boolean
   checkboxes: boolean
   /** By-store only: list the things each merged item is for, under it. */
   sources: boolean
@@ -19,7 +17,6 @@ export interface ExportOptions {
 export const DEFAULT_OPTIONS: ExportOptions = {
   amounts: true,
   notes: true,
-  skipEmpty: true,
   checkboxes: true,
   sources: true,
 }
@@ -99,13 +96,27 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
     blocks.push({ type: 'heading', level: 2, text: store })
     const items = [...byStore.get(store)!.values()].sort((a, b) => a.name.localeCompare(b.name))
     for (const it of items) {
-      blocks.push({ type: 'item', text: itemLabel(it.name, combineAmounts(it.amounts, it.unit), opts) })
-      if (opts.sources) {
+      // A single-item thing named after the item: its source line would just
+      // repeat the item, so fold any note onto the item row and skip the subitem.
+      const redundant =
+        it.sources.length === 1 &&
+        it.sources[0].name.trim().toLowerCase() === it.name.trim().toLowerCase()
+      const foldedNote =
+        redundant && opts.notes && it.sources[0].notes.trim()
+          ? it.sources[0].notes.trim().replace(/\s*\n\s*/g, ' ')
+          : undefined
+      blocks.push({
+        type: 'item',
+        text: itemLabel(it.name, combineAmounts(it.amounts, it.unit), opts),
+        note: foldedNote,
+      })
+      if (opts.sources && !redundant) {
         for (const s of it.sources) {
           let text = s.name
           if (opts.amounts && s.amount.trim()) text += ` (${s.amount.trim()})`
-          if (opts.notes && s.notes.trim()) text += ` — ${s.notes.trim().replace(/\s*\n\s*/g, ' ')}`
-          blocks.push({ type: 'subitem', text })
+          const note =
+            opts.notes && s.notes.trim() ? s.notes.trim().replace(/\s*\n\s*/g, ' ') : undefined
+          blocks.push({ type: 'subitem', text, note })
         }
       }
     }
@@ -113,59 +124,41 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
   return blocks
 }
 
-/** By Thing: each thing (with notes) and its items; no merging. */
-export function buildThingBlocks(data: Dataset, opts: ExportOptions): Block[] {
-  const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
-  const blocks: Block[] = []
-  for (const t of data.things) {
-    const items = data.thingItems.filter((ti) => ti.thingId === t.id)
-    if (opts.skipEmpty && items.length === 0) continue
-    blocks.push({
-      type: 'heading',
-      level: 2,
-      text: t.name,
-      sub: `${t.category} › ${t.subCategory}`,
-    })
-    if (opts.notes && t.notes.trim()) blocks.push({ type: 'note', text: t.notes.trim() })
-    for (const ti of items) {
-      const name = catalogById.get(ti.catalogItemId)?.name ?? '(unknown)'
-      blocks.push({ type: 'item', text: itemLabel(name, ti.amount, opts) })
-    }
-  }
-  return blocks
-}
-
-/** By Category → Subcategory: things grouped under their taxonomy headings. */
+/** Menu: things bulleted under their category → subcategory headings (no items). */
 export function buildCategoryBlocks(data: Dataset, opts: ExportOptions): Block[] {
-  const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
-  const hasItems = (thingId: string) => data.thingItems.some((ti) => ti.thingId === thingId)
   const blocks: Block[] = []
 
   for (const cat of data.categories) {
     const catBlocks: Block[] = []
     for (const sub of cat.subCategories) {
       const subThings = data.things.filter(
-        (t) =>
-          t.category === cat.name &&
-          t.subCategory === sub &&
-          (!opts.skipEmpty || hasItems(t.id)),
+        (t) => t.category === cat.name && t.subCategory === sub,
       )
       if (subThings.length === 0) continue
-      catBlocks.push({ type: 'heading', level: 2, text: sub })
+      catBlocks.push({ type: 'heading', level: 3, text: sub })
       for (const t of subThings) {
-        catBlocks.push({ type: 'heading', level: 3, text: t.name })
-        if (opts.notes && t.notes.trim()) catBlocks.push({ type: 'note', text: t.notes.trim() })
-        for (const ti of data.thingItems.filter((x) => x.thingId === t.id)) {
-          const name = catalogById.get(ti.catalogItemId)?.name ?? '(unknown)'
-          catBlocks.push({ type: 'item', text: itemLabel(name, ti.amount, opts) })
-        }
+        const note =
+          opts.notes && t.notes.trim() ? t.notes.trim().replace(/\s*\n\s*/g, ' ') : undefined
+        catBlocks.push({ type: 'item', text: t.name, note })
       }
     }
     if (catBlocks.length === 0) continue
-    blocks.push({ type: 'heading', level: 1, text: cat.name })
+    blocks.push({ type: 'heading', level: 2, text: cat.name })
     blocks.push(...catBlocks)
   }
   return blocks
+}
+
+/**
+ * Render a note as an italic Markdown suffix. Item rows put it in parens (their
+ * amount already uses an em-dash); subitem rows use an em-dash (their amount is
+ * already parenthesized) — so each line type stays unambiguous.
+ */
+function itemNote(note?: string): string {
+  return note ? ` _(${note})_` : ''
+}
+function subitemNote(note?: string): string {
+  return note ? ` — _${note}_` : ''
 }
 
 /** Serialize blocks to Markdown (task-list checkboxes optional). */
@@ -174,13 +167,12 @@ export function blocksToMarkdown(blocks: Block[], opts: ExportOptions): string {
   for (const b of blocks) {
     if (b.type === 'heading') {
       if (lines.length) lines.push('')
-      lines.push(`${'#'.repeat(b.level)} ${b.text}${b.sub ? `  _(${b.sub})_` : ''}`)
-    } else if (b.type === 'note') {
-      lines.push(`> ${b.text}`)
+      const hashes = '#'.repeat(Math.min(b.level + 3, 6))
+      lines.push(`${hashes} ${b.text}`)
     } else if (b.type === 'subitem') {
-      lines.push(`  - ${b.text}`)
+      lines.push(`  - ${b.text}${subitemNote(b.note)}`)
     } else {
-      lines.push(`- ${opts.checkboxes ? '[ ] ' : ''}${b.text}`)
+      lines.push(`- ${opts.checkboxes ? '[ ] ' : ''}${b.text}${itemNote(b.note)}`)
     }
   }
   return lines.join('\n').trim() + '\n'

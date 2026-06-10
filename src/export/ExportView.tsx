@@ -15,13 +15,12 @@ import {
   blocksToMarkdown,
   buildCategoryBlocks,
   buildStoreBlocks,
-  buildThingBlocks,
   DEFAULT_OPTIONS,
   type Block,
   type ExportOptions,
 } from './exportModel'
 
-type Pivot = 'store' | 'thing' | 'category'
+type Pivot = 'store' | 'category'
 
 /** Renders export blocks as a formatted preview (not raw Markdown). */
 function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean }) {
@@ -37,28 +36,21 @@ function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean 
       {blocks.map((b, i) => {
         if (b.type === 'heading') {
           return (
-            <Title key={i} order={(b.level + 2) as 3 | 4 | 5} mt={i === 0 ? 0 : 'sm'}>
+            <Title key={i} order={Math.min(b.level + 3, 6) as 4 | 5 | 6} mt={i === 0 ? 0 : 'sm'}>
               {b.text}
-              {b.sub && (
-                <Text component="span" c="dimmed" fw={400} size="sm">
-                  {'  '}
-                  ({b.sub})
-                </Text>
-              )}
             </Title>
-          )
-        }
-        if (b.type === 'note') {
-          return (
-            <Text key={i} c="dimmed" fs="italic" size="sm" pl="sm">
-              {b.text}
-            </Text>
           )
         }
         if (b.type === 'subitem') {
           return (
             <Text key={i} c="dimmed" size="xs" pl="xl">
               {b.text}
+              {b.note && (
+                <Text component="span" fs="italic">
+                  {' — '}
+                  {b.note}
+                </Text>
+              )}
             </Text>
           )
         }
@@ -66,6 +58,13 @@ function Preview({ blocks, checkboxes }: { blocks: Block[]; checkboxes: boolean 
           <Text key={i} size="sm">
             {checkboxes ? '☐ ' : '• '}
             {b.text}
+            {b.note && (
+              <Text component="span" c="dimmed" fs="italic" size="sm">
+                {' ('}
+                {b.note}
+                {')'}
+              </Text>
+            )}
           </Text>
         )
       })}
@@ -81,17 +80,15 @@ export function ExportView({ data }: { data: Dataset }) {
     setOpts((o) => ({ ...o, [key]: value }))
 
   const content =
-    pivot === 'store'
-      ? buildStoreBlocks(data, opts)
-      : pivot === 'thing'
-        ? buildThingBlocks(data, opts)
-        : buildCategoryBlocks(data, opts)
+    pivot === 'store' ? buildStoreBlocks(data, opts) : buildCategoryBlocks(data, opts)
   // Prepend the event title as the document heading (only when there's content).
   const blocks: Block[] =
     content.length > 0 && data.title.trim()
       ? [{ type: 'heading', level: 1, text: data.title.trim() }, ...content]
       : content
-  const markdown = blocksToMarkdown(blocks, opts)
+  // Checkboxes are a shopping-list affordance; the Menu is always plain bullets.
+  const checkboxes = pivot === 'store' && opts.checkboxes
+  const markdown = blocksToMarkdown(blocks, { ...opts, checkboxes })
 
   async function copy() {
     await navigator.clipboard.writeText(markdown)
@@ -111,9 +108,8 @@ export function ExportView({ data }: { data: Dataset }) {
           value={pivot}
           onChange={(v) => setPivot(v as Pivot)}
           data={[
-            { label: 'By store', value: 'store' },
-            { label: 'By thing', value: 'thing' },
-            { label: 'By category', value: 'category' },
+            { label: 'Shopping list', value: 'store' },
+            { label: 'Menu', value: 'category' },
           ]}
         />
         <Button size="xs" onClick={copy} disabled={blocks.length === 0}>
@@ -126,6 +122,7 @@ export function ExportView({ data }: { data: Dataset }) {
           size="xs"
           label="Checkboxes"
           checked={opts.checkboxes}
+          disabled={pivot !== 'store'}
           onChange={(e) => setOpt('checkboxes', e.currentTarget.checked)}
         />
         <Checkbox
@@ -138,15 +135,7 @@ export function ExportView({ data }: { data: Dataset }) {
           size="xs"
           label="Notes"
           checked={opts.notes}
-          disabled={pivot === 'store' && !opts.sources}
           onChange={(e) => setOpt('notes', e.currentTarget.checked)}
-        />
-        <Checkbox
-          size="xs"
-          label="Skip things with no items"
-          checked={opts.skipEmpty}
-          disabled={pivot === 'store'}
-          onChange={(e) => setOpt('skipEmpty', e.currentTarget.checked)}
         />
         <Checkbox
           size="xs"
@@ -159,7 +148,7 @@ export function ExportView({ data }: { data: Dataset }) {
 
       <Paper withBorder p="md" radius="md">
         <Box>
-          <Preview blocks={blocks} checkboxes={opts.checkboxes} />
+          <Preview blocks={blocks} checkboxes={checkboxes} />
         </Box>
       </Paper>
     </div>
