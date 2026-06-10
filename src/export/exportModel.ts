@@ -126,6 +126,7 @@ export function buildStoreBlocks(data: Dataset, opts: ExportOptions): Block[] {
 
 /** Menu: things bulleted under their category → subcategory headings (no items). */
 export function buildCategoryBlocks(data: Dataset, opts: ExportOptions): Block[] {
+  const catalogById = new Map(data.catalogItems.map((ci) => [ci.id, ci]))
   const blocks: Block[] = []
 
   for (const cat of data.categories) {
@@ -140,6 +141,14 @@ export function buildCategoryBlocks(data: Dataset, opts: ExportOptions): Block[]
         const note =
           opts.notes && t.notes.trim() ? t.notes.trim().replace(/\s*\n\s*/g, ' ') : undefined
         catBlocks.push({ type: 'item', text: t.name, note })
+        // For multi-item things, hint at the composition with a comma-list of names.
+        const itemNames = data.thingItems
+          .filter((ti) => ti.thingId === t.id)
+          .map((ti) => catalogById.get(ti.catalogItemId)?.name)
+          .filter((n): n is string => !!n)
+        if (itemNames.length > 1) {
+          catBlocks.push({ type: 'subitem', text: itemNames.join(', ') })
+        }
       }
     }
     if (catBlocks.length === 0) continue
